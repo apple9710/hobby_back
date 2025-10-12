@@ -1,0 +1,18 @@
+{
+  "game": [
+    "LoL",
+    "Overwatch",
+    "Minecraft",
+    "StarCraft"
+  ],
+  "sports": [
+    "Football",
+    "Basketball",
+    "Tennis"
+  ],
+  "music": [
+    "Piano",
+    "Guitar",
+    "Drums"
+  ]
+}
