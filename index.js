@@ -1,7 +1,20 @@
 const express = require('express');
+const cors = require('cors');
 
 const app = express();
-app.use(express.json()); 
+
+// CORS 설정: 특정 origin만 허용
+const corsOptions = {
+  origin: [
+    'http://localhost',
+    'http://127.0.0.1',
+    'https://apple9710.github.io'
+  ],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
+app.use(express.json());
 const PORT = 3000;
 
 // JSON 데이터 불러오기
