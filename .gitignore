@@ -25,3 +25,5 @@ Thumbs.db
 
 # Optional eslint cache
 .eslintcache
+data.json
+

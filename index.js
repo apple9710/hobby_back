@@ -35,6 +35,41 @@ try {
   fs.writeFileSync(dataPath, JSON.stringify({}));
 }
 
+// 서버 시작 시 중복 제거 함수
+function removeDuplicates() {
+  let hasChanges = false;
+
+  Object.keys(data).forEach(hobby => {
+    const originalLength = data[hobby].length;
+
+    // 공백 제거 후 비교하여 중복 제거 (원본 유지)
+    const seen = new Set();
+    data[hobby] = data[hobby].filter(word => {
+      const normalized = word.trim().replace(/\s+/g, '');
+      if (seen.has(normalized.toLowerCase())) {
+        return false;
+      }
+      seen.add(normalized.toLowerCase());
+      return true;
+    });
+
+    if (data[hobby].length !== originalLength) {
+      hasChanges = true;
+      console.log(`[${hobby}] Removed ${originalLength - data[hobby].length} duplicates`);
+    }
+  });
+
+  if (hasChanges) {
+    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+    console.log('Duplicates removed and saved to data.json');
+  } else {
+    console.log('No duplicates found');
+  }
+}
+
+// 서버 시작 시 중복 제거 실행
+removeDuplicates();
+
 // GET: 취미별 단어 가져오기
 app.get('/hobby/:type', (req, res) => {
   const type = req.params.type;
@@ -58,6 +93,22 @@ app.post('/hobby/:type', (req, res) => {
 
   if (!data[type]) {
     data[type] = [];
+  }
+
+  // 중복 체크: 공백 제거 후 비교 (대소문자 무시)
+  const normalizedInput = word.trim().replace(/\s+/g, '').toLowerCase();
+  const isDuplicate = data[type].some(existingWord => {
+    const normalized = existingWord.trim().replace(/\s+/g, '').toLowerCase();
+    return normalized === normalizedInput;
+  });
+
+  if (isDuplicate) {
+    return res.status(409).json({
+      error: 'Duplicate word',
+      message: 'This word already exists',
+      hobby: type,
+      words: data[type]
+    });
   }
 
   data[type].push(word);
