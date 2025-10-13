@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -65,7 +66,13 @@ app.post('/hobby/:type', (req, res) => {
   res.json({ message: 'Word added', hobby: type, words: data[type] });
 });
 
-// 외부 접속 허용 (GitHub Pages에서 요청받기 위해 필요)
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+// SSL 인증서 로드 (HTTPS 서버용)
+const sslOptions = {
+  key: fs.readFileSync('/etc/letsencrypt/live/chukapi.xyz/privkey.pem'),
+  cert: fs.readFileSync('/etc/letsencrypt/live/chukapi.xyz/fullchain.pem')
+};
+
+// HTTPS 서버 실행 (외부 접속 허용)
+https.createServer(sslOptions, app).listen(PORT, '0.0.0.0', () => {
+  console.log(`HTTPS Server running on port ${PORT}`);
 });
