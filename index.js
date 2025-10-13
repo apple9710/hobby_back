@@ -9,10 +9,14 @@ const app = express();
 const corsOptions = {
   origin: [
     'http://localhost',
+    'http://localhost:3000', // 포트 추가
+    'http://localhost:5500', // Live Server 등
+    'http://localhost:5174',
+    'http://localhost:5173',
     'http://127.0.0.1',
-    'https://apple9710.github.io'
+    'https://apple9710.github.io',
   ],
-  credentials: true
+  credentials: true,
 };
 
 app.use(cors(corsOptions));
