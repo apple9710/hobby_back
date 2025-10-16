@@ -26,13 +26,30 @@ app.use(express.json());
 const PORT = 3000;
 const dataPath = path.join(__dirname, 'data.json');
 
+// 기본 데이터 상수
+const DEFAULT_DATA = {
+  game: ['오버워치', '배틀그라운드', '마인크래프트'],
+  book: ['천개의파랑', '지구끝의온실', '총,균,쇠'],
+  movie: ['드래곤길들이기', '괴물의 아이', '러브레터'],
+  food: ['피자', '초밥', '회'],
+  pet: ['물고기', '도마뱀', '강아지'],
+  plant: ['선인장', '스투키', '능소화'],
+  money: ['저축하기', '여행가기', '쇼핑'],
+  music: ['세카이노오와리', '알렉산드로스', '스파이에어'],
+  family: ['여동생', '오빠, 여동생', '5인가족'],
+  health: ['영양제 먹기', '헬스', '등산'],
+  job: ['모션그래픽', '타투이스트', '애견미용사'],
+  home: ['남양주', '수원', '의정부']
+};
+
 // 데이터 로드
 let data = {};
 try {
   data = require(dataPath);
 } catch (err) {
-  console.log('data.json not found, creating new one');
-  fs.writeFileSync(dataPath, JSON.stringify({}));
+  console.log('data.json not found, creating new one with default data');
+  data = JSON.parse(JSON.stringify(DEFAULT_DATA)); // 깊은 복사
+  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 }
 
 // 서버 시작 시 중복 제거 함수
@@ -69,6 +86,11 @@ function removeDuplicates() {
 
 // 서버 시작 시 중복 제거 실행
 removeDuplicates();
+
+// GET: 전체 데이터 가져오기
+app.get('/data', (req, res) => {
+  res.json(data);
+});
 
 // GET: 취미별 단어 가져오기
 app.get('/hobby/:type', (req, res) => {
@@ -115,6 +137,117 @@ app.post('/hobby/:type', (req, res) => {
   fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 
   res.json({ message: 'Word added', hobby: type, words: data[type] });
+});
+
+// DELETE: 단어 삭제
+app.delete('/hobby/:type', (req, res) => {
+  const type = req.params.type;
+  const word = req.body.word;
+
+  if (!word) {
+    return res.status(400).json({ error: 'word is required' });
+  }
+
+  if (!data[type]) {
+    return res.status(404).json({ error: 'Hobby not found' });
+  }
+
+  // 단어 찾기 (공백 제거 후 비교)
+  const normalizedInput = word.trim().replace(/\s+/g, '').toLowerCase();
+  const index = data[type].findIndex(existingWord => {
+    const normalized = existingWord.trim().replace(/\s+/g, '').toLowerCase();
+    return normalized === normalizedInput;
+  });
+
+  if (index === -1) {
+    return res.status(404).json({
+      error: 'Word not found',
+      message: 'This word does not exist',
+      hobby: type,
+      words: data[type]
+    });
+  }
+
+  // 삭제
+  const deletedWord = data[type].splice(index, 1)[0];
+  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+
+  res.json({
+    message: 'Word deleted',
+    deletedWord: deletedWord,
+    hobby: type,
+    words: data[type]
+  });
+});
+
+// PUT: 단어 수정
+app.put('/hobby/:type', (req, res) => {
+  const type = req.params.type;
+  const { oldWord, newWord } = req.body;
+
+  if (!oldWord || !newWord) {
+    return res.status(400).json({ error: 'oldWord and newWord are required' });
+  }
+
+  if (!data[type]) {
+    return res.status(404).json({ error: 'Hobby not found' });
+  }
+
+  // 기존 단어 찾기
+  const normalizedOldWord = oldWord.trim().replace(/\s+/g, '').toLowerCase();
+  const index = data[type].findIndex(existingWord => {
+    const normalized = existingWord.trim().replace(/\s+/g, '').toLowerCase();
+    return normalized === normalizedOldWord;
+  });
+
+  if (index === -1) {
+    return res.status(404).json({
+      error: 'Word not found',
+      message: 'The old word does not exist',
+      hobby: type,
+      words: data[type]
+    });
+  }
+
+  // 새 단어 중복 체크
+  const normalizedNewWord = newWord.trim().replace(/\s+/g, '').toLowerCase();
+  const isDuplicate = data[type].some((existingWord, i) => {
+    if (i === index) return false; // 자기 자신은 제외
+    const normalized = existingWord.trim().replace(/\s+/g, '').toLowerCase();
+    return normalized === normalizedNewWord;
+  });
+
+  if (isDuplicate) {
+    return res.status(409).json({
+      error: 'Duplicate word',
+      message: 'The new word already exists',
+      hobby: type,
+      words: data[type]
+    });
+  }
+
+  // 수정
+  data[type][index] = newWord;
+  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+
+  res.json({
+    message: 'Word updated',
+    oldWord: oldWord,
+    newWord: newWord,
+    hobby: type,
+    words: data[type]
+  });
+});
+
+// POST: 데이터 초기화 (기본값으로 리셋)
+app.post('/reset', (req, res) => {
+  data = JSON.parse(JSON.stringify(DEFAULT_DATA)); // 깊은 복사
+  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+
+  res.json({
+    message: 'Data reset to default',
+    data: data
+  });
 });
 
 // SSL 인증서 로드 (HTTPS 서버용)
