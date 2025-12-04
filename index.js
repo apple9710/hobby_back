@@ -15,6 +15,7 @@ const corsOptions = {
     'http://localhost:5174',
     'http://localhost:5173',
     'http://127.0.0.1',
+    'https://open-yy.com/',
     'https://apple9710.github.io',
     'https://theopenproduct.cafe24.com',
   ],
@@ -62,7 +63,7 @@ const DEFAULT_DATA = {
   family: ['여동생', '오빠, 여동생', '5인가족'],
   health: ['영양제 먹기', '헬스', '등산'],
   job: ['모션그래픽', '타투이스트', '애견미용사'],
-  home: ['남양주', '수원', '의정부']
+  home: ['남양주', '수원', '의정부'],
 };
 
 // 데이터 로드
@@ -79,12 +80,12 @@ try {
 function removeDuplicates() {
   let hasChanges = false;
 
-  Object.keys(data).forEach(hobby => {
+  Object.keys(data).forEach((hobby) => {
     const originalLength = data[hobby].length;
 
     // 공백 제거 후 비교하여 중복 제거 (원본 유지)
     const seen = new Set();
-    data[hobby] = data[hobby].filter(word => {
+    data[hobby] = data[hobby].filter((word) => {
       const normalized = word.trim().replace(/\s+/g, '');
       if (seen.has(normalized.toLowerCase())) {
         return false;
@@ -95,7 +96,9 @@ function removeDuplicates() {
 
     if (data[hobby].length !== originalLength) {
       hasChanges = true;
-      console.log(`[${hobby}] Removed ${originalLength - data[hobby].length} duplicates`);
+      console.log(
+        `[${hobby}] Removed ${originalLength - data[hobby].length} duplicates`,
+      );
     }
   });
 
@@ -142,7 +145,7 @@ app.post('/hobby/:type', (req, res) => {
 
   // 중복 체크: 공백 제거 후 비교 (대소문자 무시)
   const normalizedInput = word.trim().replace(/\s+/g, '').toLowerCase();
-  const isDuplicate = data[type].some(existingWord => {
+  const isDuplicate = data[type].some((existingWord) => {
     const normalized = existingWord.trim().replace(/\s+/g, '').toLowerCase();
     return normalized === normalizedInput;
   });
@@ -152,7 +155,7 @@ app.post('/hobby/:type', (req, res) => {
       error: 'Duplicate word',
       message: 'This word already exists',
       hobby: type,
-      words: data[type]
+      words: data[type],
     });
   }
 
@@ -177,7 +180,7 @@ app.delete('/hobby/:type', (req, res) => {
 
   // 단어 찾기 (공백 제거 후 비교)
   const normalizedInput = word.trim().replace(/\s+/g, '').toLowerCase();
-  const index = data[type].findIndex(existingWord => {
+  const index = data[type].findIndex((existingWord) => {
     const normalized = existingWord.trim().replace(/\s+/g, '').toLowerCase();
     return normalized === normalizedInput;
   });
@@ -187,7 +190,7 @@ app.delete('/hobby/:type', (req, res) => {
       error: 'Word not found',
       message: 'This word does not exist',
       hobby: type,
-      words: data[type]
+      words: data[type],
     });
   }
 
@@ -199,7 +202,7 @@ app.delete('/hobby/:type', (req, res) => {
     message: 'Word deleted',
     deletedWord: deletedWord,
     hobby: type,
-    words: data[type]
+    words: data[type],
   });
 });
 
@@ -218,7 +221,7 @@ app.put('/hobby/:type', (req, res) => {
 
   // 기존 단어 찾기
   const normalizedOldWord = oldWord.trim().replace(/\s+/g, '').toLowerCase();
-  const index = data[type].findIndex(existingWord => {
+  const index = data[type].findIndex((existingWord) => {
     const normalized = existingWord.trim().replace(/\s+/g, '').toLowerCase();
     return normalized === normalizedOldWord;
   });
@@ -228,7 +231,7 @@ app.put('/hobby/:type', (req, res) => {
       error: 'Word not found',
       message: 'The old word does not exist',
       hobby: type,
-      words: data[type]
+      words: data[type],
     });
   }
 
@@ -245,7 +248,7 @@ app.put('/hobby/:type', (req, res) => {
       error: 'Duplicate word',
       message: 'The new word already exists',
       hobby: type,
-      words: data[type]
+      words: data[type],
     });
   }
 
@@ -258,7 +261,7 @@ app.put('/hobby/:type', (req, res) => {
     oldWord: oldWord,
     newWord: newWord,
     hobby: type,
-    words: data[type]
+    words: data[type],
   });
 });
 
@@ -268,9 +271,9 @@ app.put('/hobby/:type', (req, res) => {
 function cleanExpiredCodes() {
   const now = Date.now();
   const before = authData.codes.length;
-  authData.codes = authData.codes.filter(item => {
+  authData.codes = authData.codes.filter((item) => {
     const createdAt = new Date(item.createdAt).getTime();
-    return (now - createdAt) < CODE_EXPIRY_MS;
+    return now - createdAt < CODE_EXPIRY_MS;
   });
   if (authData.codes.length !== before) {
     fs.writeFileSync(authPath, JSON.stringify(authData, null, 2));
@@ -291,7 +294,7 @@ app.get('/publish', (req, res) => {
 
   authData.codes.push({
     code: newCode,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
   });
 
   fs.writeFileSync(authPath, JSON.stringify(authData, null, 2));
@@ -299,7 +302,7 @@ app.get('/publish', (req, res) => {
   res.json({
     message: 'Auth code issued',
     code: newCode,
-    expiresIn: '24 hours'
+    expiresIn: '24 hours',
   });
 });
 
@@ -323,7 +326,7 @@ app.post('/auth/issue', (req, res) => {
 
   authData.codes.push({
     code: newCode,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
   });
 
   fs.writeFileSync(authPath, JSON.stringify(authData, null, 2));
@@ -331,7 +334,7 @@ app.post('/auth/issue', (req, res) => {
   res.json({
     message: 'Auth code issued',
     code: newCode,
-    expiresIn: '24 hours'
+    expiresIn: '24 hours',
   });
 });
 
@@ -346,7 +349,7 @@ app.post('/auth/verify', (req, res) => {
   // 만료된 코드 정리
   cleanExpiredCodes();
 
-  const validCode = authData.codes.find(item => item.code === code);
+  const validCode = authData.codes.find((item) => item.code === code);
 
   if (validCode) {
     // 유효한 코드면 세션 값도 함께 반환
@@ -354,7 +357,7 @@ app.post('/auth/verify', (req, res) => {
       valid: true,
       message: 'Access granted',
       sessionKey: SESSION_KEY,
-      sessionValue: SESSION_VALUE
+      sessionValue: SESSION_VALUE,
     });
   } else {
     res.status(401).json({ valid: false, message: 'Invalid or expired code' });
@@ -388,7 +391,7 @@ app.delete('/auth/revoke', (req, res) => {
     return res.status(403).json({ error: 'Invalid master code' });
   }
 
-  const index = authData.codes.findIndex(item => item.code === code);
+  const index = authData.codes.findIndex((item) => item.code === code);
 
   if (index === -1) {
     return res.status(404).json({ error: 'Code not found' });
@@ -409,14 +412,14 @@ app.post('/reset', (req, res) => {
 
   res.json({
     message: 'Data reset to default',
-    data: data
+    data: data,
   });
 });
 
 // SSL 인증서 로드 (HTTPS 서버용)
 const sslOptions = {
   key: fs.readFileSync('/etc/letsencrypt/live/chukapi.xyz/privkey.pem'),
-  cert: fs.readFileSync('/etc/letsencrypt/live/chukapi.xyz/fullchain.pem')
+  cert: fs.readFileSync('/etc/letsencrypt/live/chukapi.xyz/fullchain.pem'),
 };
 
 // HTTPS 서버 실행 (외부 접속 허용)
