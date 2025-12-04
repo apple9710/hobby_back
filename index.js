@@ -16,6 +16,7 @@ const corsOptions = {
     'http://localhost:5173',
     'http://127.0.0.1',
     'https://apple9710.github.io',
+    'https://theopenproduct.cafe24.com',
   ],
   credentials: true,
 };
@@ -23,8 +24,30 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+const crypto = require('crypto');
+
 const PORT = 3000;
 const dataPath = path.join(__dirname, 'data.json');
+const authPath = path.join(__dirname, 'auth.json');
+
+// 마스터 코드 (환경변수 또는 하드코딩 - 실제 운영시 환경변수 권장)
+const MASTER_CODE = process.env.MASTER_CODE || 'your-master-code-here';
+
+// 세션 검증용 키 (프론트 세션스토리지와 동일해야 함)
+const SESSION_KEY = 'hobby_session';
+const SESSION_VALUE = process.env.SESSION_VALUE || 'authenticated_user_2024';
+
+// 코드 유효기간 (24시간, 밀리초)
+const CODE_EXPIRY_MS = 24 * 60 * 60 * 1000;
+
+// 인증 코드 데이터 로드
+let authData = { codes: [] };
+try {
+  authData = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+} catch (err) {
+  console.log('auth.json not found, creating new one');
+  fs.writeFileSync(authPath, JSON.stringify(authData, null, 2));
+}
 
 // 기본 데이터 상수
 const DEFAULT_DATA = {
@@ -238,6 +261,146 @@ app.put('/hobby/:type', (req, res) => {
     words: data[type]
   });
 });
+
+// ============ 인증 API ============
+
+// 만료된 코드 정리 함수
+function cleanExpiredCodes() {
+  const now = Date.now();
+  const before = authData.codes.length;
+  authData.codes = authData.codes.filter(item => {
+    const createdAt = new Date(item.createdAt).getTime();
+    return (now - createdAt) < CODE_EXPIRY_MS;
+  });
+  if (authData.codes.length !== before) {
+    fs.writeFileSync(authPath, JSON.stringify(authData, null, 2));
+    console.log(`Cleaned ${before - authData.codes.length} expired codes`);
+  }
+}
+
+// 서버 시작 시 만료 코드 정리
+cleanExpiredCodes();
+
+// GET: 코드 발급 페이지 (누구나 접근 가능)
+app.get('/publish', (req, res) => {
+  // 만료된 코드 정리
+  cleanExpiredCodes();
+
+  // 새 인증 코드 생성 (16자리 랜덤 문자열)
+  const newCode = crypto.randomBytes(8).toString('hex');
+
+  authData.codes.push({
+    code: newCode,
+    createdAt: new Date().toISOString()
+  });
+
+  fs.writeFileSync(authPath, JSON.stringify(authData, null, 2));
+
+  res.json({
+    message: 'Auth code issued',
+    code: newCode,
+    expiresIn: '24 hours'
+  });
+});
+
+// POST: 인증 코드 발급 (마스터 코드 필요) - 기존 유지
+app.post('/auth/issue', (req, res) => {
+  const { masterCode } = req.body;
+
+  if (!masterCode) {
+    return res.status(400).json({ error: 'masterCode is required' });
+  }
+
+  if (masterCode !== MASTER_CODE) {
+    return res.status(403).json({ error: 'Invalid master code' });
+  }
+
+  // 만료된 코드 정리
+  cleanExpiredCodes();
+
+  // 새 인증 코드 생성 (16자리 랜덤 문자열)
+  const newCode = crypto.randomBytes(8).toString('hex');
+
+  authData.codes.push({
+    code: newCode,
+    createdAt: new Date().toISOString()
+  });
+
+  fs.writeFileSync(authPath, JSON.stringify(authData, null, 2));
+
+  res.json({
+    message: 'Auth code issued',
+    code: newCode,
+    expiresIn: '24 hours'
+  });
+});
+
+// POST: 인증 코드 검증 (코드 입력해서 접속 시)
+app.post('/auth/verify', (req, res) => {
+  const { code } = req.body;
+
+  if (!code) {
+    return res.status(400).json({ error: 'code is required' });
+  }
+
+  // 만료된 코드 정리
+  cleanExpiredCodes();
+
+  const validCode = authData.codes.find(item => item.code === code);
+
+  if (validCode) {
+    // 유효한 코드면 세션 값도 함께 반환
+    res.json({
+      valid: true,
+      message: 'Access granted',
+      sessionKey: SESSION_KEY,
+      sessionValue: SESSION_VALUE
+    });
+  } else {
+    res.status(401).json({ valid: false, message: 'Invalid or expired code' });
+  }
+});
+
+// POST: 세션 검증 (페이지 접근 시 세션스토리지 값 확인)
+app.post('/auth/session', (req, res) => {
+  const { sessionValue } = req.body;
+
+  if (!sessionValue) {
+    return res.status(400).json({ error: 'sessionValue is required' });
+  }
+
+  if (sessionValue === SESSION_VALUE) {
+    res.json({ valid: true, message: 'Session valid' });
+  } else {
+    res.status(401).json({ valid: false, message: 'Invalid session' });
+  }
+});
+
+// DELETE: 인증 코드 삭제 (마스터 코드 필요)
+app.delete('/auth/revoke', (req, res) => {
+  const { masterCode, code } = req.body;
+
+  if (!masterCode || !code) {
+    return res.status(400).json({ error: 'masterCode and code are required' });
+  }
+
+  if (masterCode !== MASTER_CODE) {
+    return res.status(403).json({ error: 'Invalid master code' });
+  }
+
+  const index = authData.codes.findIndex(item => item.code === code);
+
+  if (index === -1) {
+    return res.status(404).json({ error: 'Code not found' });
+  }
+
+  authData.codes.splice(index, 1);
+  fs.writeFileSync(authPath, JSON.stringify(authData, null, 2));
+
+  res.json({ message: 'Code revoked', code });
+});
+
+// ============ 데이터 관리 API ============
 
 // POST: 데이터 초기화 (기본값으로 리셋)
 app.post('/reset', (req, res) => {
