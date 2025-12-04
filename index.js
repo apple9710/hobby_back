@@ -34,17 +34,20 @@ const authPath = path.join(__dirname, 'auth.json');
 // 마스터 코드 (환경변수 또는 하드코딩 - 실제 운영시 환경변수 권장)
 const MASTER_CODE = process.env.MASTER_CODE || 'your-master-code-here';
 
-// 세션 검증용 키 (프론트 세션스토리지와 동일해야 함)
+// 세션 검증용 키
 const SESSION_KEY = 'hobby_session';
-const SESSION_VALUE = process.env.SESSION_VALUE || 'authenticated_user_2024';
 
 // 코드 유효기간 (24시간, 밀리초)
 const CODE_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
-// 인증 코드 데이터 로드
-let authData = { codes: [] };
+// 인증 코드 및 세션 데이터 로드
+let authData = { codes: [], sessions: [] };
 try {
   authData = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+  // 기존 데이터에 sessions가 없으면 추가
+  if (!authData.sessions) {
+    authData.sessions = [];
+  }
 } catch (err) {
   console.log('auth.json not found, creating new one');
   fs.writeFileSync(authPath, JSON.stringify(authData, null, 2));
@@ -267,27 +270,45 @@ app.put('/hobby/:type', (req, res) => {
 
 // ============ 인증 API ============
 
-// 만료된 코드 정리 함수
-function cleanExpiredCodes() {
+// 만료된 코드 및 세션 정리 함수
+function cleanExpiredData() {
   const now = Date.now();
-  const before = authData.codes.length;
+  let hasChanges = false;
+
+  // 만료된 코드 정리
+  const beforeCodes = authData.codes.length;
   authData.codes = authData.codes.filter((item) => {
     const createdAt = new Date(item.createdAt).getTime();
     return now - createdAt < CODE_EXPIRY_MS;
   });
-  if (authData.codes.length !== before) {
+  if (authData.codes.length !== beforeCodes) {
+    hasChanges = true;
+    console.log(`Cleaned ${beforeCodes - authData.codes.length} expired codes`);
+  }
+
+  // 만료된 세션 정리
+  const beforeSessions = authData.sessions.length;
+  authData.sessions = authData.sessions.filter((item) => {
+    const createdAt = new Date(item.createdAt).getTime();
+    return now - createdAt < CODE_EXPIRY_MS;
+  });
+  if (authData.sessions.length !== beforeSessions) {
+    hasChanges = true;
+    console.log(`Cleaned ${beforeSessions - authData.sessions.length} expired sessions`);
+  }
+
+  if (hasChanges) {
     fs.writeFileSync(authPath, JSON.stringify(authData, null, 2));
-    console.log(`Cleaned ${before - authData.codes.length} expired codes`);
   }
 }
 
-// 서버 시작 시 만료 코드 정리
-cleanExpiredCodes();
+// 서버 시작 시 만료 데이터 정리
+cleanExpiredData();
 
 // GET: 코드 발급 페이지 (누구나 접근 가능)
 app.get('/publish', (req, res) => {
-  // 만료된 코드 정리
-  cleanExpiredCodes();
+  // 만료된 데이터 정리
+  cleanExpiredData();
 
   // 새 인증 코드 생성 (16자리 랜덤 문자열)
   const newCode = crypto.randomBytes(8).toString('hex');
@@ -318,8 +339,8 @@ app.post('/auth/issue', (req, res) => {
     return res.status(403).json({ error: 'Invalid master code' });
   }
 
-  // 만료된 코드 정리
-  cleanExpiredCodes();
+  // 만료된 데이터 정리
+  cleanExpiredData();
 
   // 새 인증 코드 생성 (16자리 랜덤 문자열)
   const newCode = crypto.randomBytes(8).toString('hex');
@@ -346,18 +367,27 @@ app.post('/auth/verify', (req, res) => {
     return res.status(400).json({ error: 'code is required' });
   }
 
-  // 만료된 코드 정리
-  cleanExpiredCodes();
+  // 만료된 데이터 정리
+  cleanExpiredData();
 
   const validCode = authData.codes.find((item) => item.code === code);
 
   if (validCode) {
-    // 유효한 코드면 세션 값도 함께 반환
+    // 유효한 코드면 새로운 세션 토큰 생성
+    const sessionToken = crypto.randomBytes(16).toString('hex');
+
+    // 세션 저장
+    authData.sessions.push({
+      token: sessionToken,
+      createdAt: new Date().toISOString(),
+    });
+    fs.writeFileSync(authPath, JSON.stringify(authData, null, 2));
+
     res.json({
       valid: true,
       message: 'Access granted',
       sessionKey: SESSION_KEY,
-      sessionValue: SESSION_VALUE,
+      sessionValue: sessionToken,
     });
   } else {
     res.status(401).json({ valid: false, message: 'Invalid or expired code' });
@@ -372,7 +402,13 @@ app.post('/auth/session', (req, res) => {
     return res.status(400).json({ error: 'sessionValue is required' });
   }
 
-  if (sessionValue === SESSION_VALUE) {
+  // 만료된 데이터 정리
+  cleanExpiredData();
+
+  // 서버에 저장된 세션 토큰과 비교
+  const validSession = authData.sessions.find((item) => item.token === sessionValue);
+
+  if (validSession) {
     res.json({ valid: true, message: 'Session valid' });
   } else {
     res.status(401).json({ valid: false, message: 'Invalid session' });
