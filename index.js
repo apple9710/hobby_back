@@ -25,6 +25,12 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// 모든 요청 로깅
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 const crypto = require('crypto');
 
 const PORT = 3000;
